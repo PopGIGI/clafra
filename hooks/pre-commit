@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# clafra pre-commit hook — Blocking validation checks
+#
+# Validates tool/skill JSON schema on staged changes.
+# Detects stack dependency changes and flags affected tools.
+
+set -euo pipefail
+
+CLAFRA_ROOT="$(git rev-parse --show-toplevel)"
+CLAFRA_DIR="${CLAFRA_ROOT}/.clafra"
+VALIDATE="${CLAFRA_DIR}/validate.sh"
+
+# Only run if clafra is installed
+[[ -x "$VALIDATE" ]] || exit 0
+
+# Check if any tool/skill files or stack files are staged
+STAGED=$(git diff --cached --name-only 2>/dev/null || true)
+[[ -n "$STAGED" ]] || exit 0
+
+HAS_TOOL_CHANGES=false
+HAS_STACK_CHANGES=false
+
+while IFS= read -r file; do
+    case "$file" in
+        tools/*.json|skills/*.json) HAS_TOOL_CHANGES=true ;;
+        package.json|package-lock.json|requirements.txt|Cargo.toml|go.mod) HAS_STACK_CHANGES=true ;;
+    esac
+done <<< "$STAGED"
+
+# Run validation only if relevant files changed
+if [[ "$HAS_TOOL_CHANGES" == "true" || "$HAS_STACK_CHANGES" == "true" ]]; then
+    CLAFRA_ROOT="$CLAFRA_ROOT" "$VALIDATE" --pre-commit
+fi

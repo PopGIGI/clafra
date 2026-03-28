@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# clafra post-commit hook — Non-blocking analytics
+#
+# Runs session log reduction and pattern updates in background.
+# Output saved to .clafra/last-run.log. Surfaces at next session start.
+
+CLAFRA_ROOT="$(git rev-parse --show-toplevel)"
+CLAFRA_DIR="${CLAFRA_ROOT}/.clafra"
+LOG_FILE="${CLAFRA_DIR}/last-run.log"
+
+# Only run if clafra is installed
+[[ -d "$CLAFRA_DIR" ]] || exit 0
+
+# Run in background — never block the commit
+(
+    exec &>"$LOG_FILE"
+    echo "=== clafra post-commit $(date -u +"%Y-%m-%dT%H:%M:%SZ") ==="
+    echo ""
+
+    # Reduce session log and update patterns
+    if [[ -x "${CLAFRA_DIR}/reduce-log.sh" ]] && [[ -x "${CLAFRA_DIR}/update-patterns.sh" ]]; then
+        echo "Reducing session log..."
+        reduced=$("${CLAFRA_DIR}/reduce-log.sh" 2>&1) || {
+            echo "reduce-log.sh failed: $reduced"
+            exit 0
+        }
+
+        if [[ -n "$reduced" ]]; then
+            echo "Updating patterns..."
+            echo "$reduced" | "${CLAFRA_DIR}/update-patterns.sh" 2>&1 || true
+        else
+            echo "No session data to reduce."
+        fi
+    else
+        echo "Log pipeline scripts not found — skipping."
+    fi
+
+    echo ""
+    echo "=== done ==="
+) &
+
+# Detach from the hook — do not wait
+disown 2>/dev/null || true
+exit 0

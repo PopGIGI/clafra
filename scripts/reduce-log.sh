@@ -48,7 +48,7 @@ ERROR_PATTERNS=$(echo "$PARSED" | jq -s '
 
 # 3. Repeated content patterns — content that appears multiple times
 CONTENT_PATTERNS=$(echo "$PARSED" | jq -s '
-    [.[] | select(.content != "" and .content != null) | .content[:100]] |
+    [.[] | select(.content != "" and .content != null) | (.content | tostring)[:100]] |
     group_by(.) |
     map(select(length > 1) | {pattern: .[0], count: length}) |
     sort_by(-.count) |

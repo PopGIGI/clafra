@@ -99,9 +99,20 @@ case "$FORMAT" in
     v1_typed)
         jq -c '{
             type: .type,
-            content: (.content // .text // .message // ""),
+            content: ((.message.content // .content // .text // .message // "")
+                      | if type == "array" then
+                            [.[] | if .type == "text" then .text
+                                   elif .type == "tool_use" then ("tool_use:" + .name)
+                                   elif .type == "tool_result" then (.content // .text // "")
+                                   else ""
+                                   end] | join(" | ")
+                        elif type == "object" then tostring
+                        else . end),
             timestamp: (.timestamp // .ts // ""),
-            tool: (.tool_name // .tool // null),
+            tool: ((.message.content // null)
+                   | if type == "array" then
+                       [.[] | select(.type == "tool_use") | .name] | first // null
+                     else (.tool_name // .tool // null) end),
             error: (if .type == "error" or .error == true then true else false end)
         }' "$LOG_PATH" 2>/dev/null
         ;;

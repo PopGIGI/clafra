@@ -21,11 +21,19 @@ NC='\033[0m'
 ISSUES=0
 STALE_COUNT=0
 DEPRECATION_FLAGS=0
+VALIDATION_LOG="${CLAFRA_DIR}/validation.log"
+CURRENT_COMMIT=$(git -C "$CLAFRA_ROOT" rev-parse --short HEAD 2>/dev/null || echo "unknown")
 
 log_issue() { echo -e "  ${RED}✗${NC} $1"; ISSUES=$((ISSUES + 1)); }
 log_warn()  { echo -e "  ${YELLOW}!${NC} $1"; }
 log_ok()    { echo -e "  ${GREEN}✓${NC} $1"; }
 log_info()  { echo -e "  ${CYAN}→${NC} $1"; }
+
+# Append one-line entry to validation log
+vlog() {
+    local tool="$1" result="$2" detail="${3:-}"
+    echo "$(now_iso) | ${MODE} | ${CURRENT_COMMIT} | ${tool} | ${result} | ${detail}" >> "$VALIDATION_LOG"
+}
 
 # --------------------------------------------------
 # Helpers
@@ -192,17 +200,21 @@ check_success_criteria() {
         # Each criterion is a shell command that should exit 0
         if ! (cd "$CLAFRA_ROOT" && eval "$criterion" &>/dev/null); then
             log_issue "${dir}/${basename_f}: criterion failed: ${criterion}"
+            vlog "$basename_f" "FAIL" "$criterion"
             failed=$((failed + 1))
         fi
         i=$((i + 1))
     done
 
-    if [[ $failed -eq 0 && "$MODE" == "--full" ]]; then
+    if [[ $failed -eq 0 ]]; then
         log_ok "${dir}/${basename_f}: all ${criteria_count} criteria pass"
-        # Update last_validated
+        vlog "$basename_f" "PASS" "${criteria_count} criteria"
+        # Update last_validated on any successful check
         local updated
         updated=$(jq --arg now "$(now_iso)" '.last_validated = $now | .status = "active"' "$file")
         locked_write "$file" "$updated"
+    else
+        vlog "$basename_f" "FAIL" "${failed}/${criteria_count} criteria failed"
     fi
 }
 
@@ -306,6 +318,18 @@ case "$MODE" in
                 check_staleness "$f"
             done
         done
+
+        echo ""
+        echo "Success criteria:"
+        for dir in tools skills; do
+            for f in "${CLAFRA_ROOT}/${dir}"/*.json; do
+                [[ -f "$f" ]] || continue
+                local_status=$(jq -r '.status' "$f" 2>/dev/null)
+                [[ "$local_status" == "active" || "$local_status" == "stale" ]] || continue
+                check_success_criteria "$f"
+            done
+        done
+
         check_pending_reviews
         ;;
 

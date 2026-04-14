@@ -160,6 +160,47 @@ install_project() {
     echo -e "  ${GREEN}✓${NC} core.hooksPath set to .hooks"
     echo ""
 
+    # Build summon index
+    echo "Building summon index..."
+    CLAFRA_ROOT="$TARGET" "${TARGET}/.clafra/build-summon-index.sh" || true
+    echo ""
+
+    # Install Claude Code hook for summoning
+    echo "Installing Claude Code hook..."
+    local claude_settings="${TARGET}/.claude/settings.json"
+    mkdir -p "${TARGET}/.claude"
+    if [[ -f "$claude_settings" ]]; then
+        # Merge hook into existing settings if not already present
+        if ! jq -e '.hooks.PreToolUse' "$claude_settings" &>/dev/null; then
+            local merged
+            merged=$(jq '.hooks.PreToolUse = [{"matcher": "Edit", "hooks": [{"type": "command", "command": ".clafra/summon.sh"}]}]' "$claude_settings")
+            echo "$merged" | jq . > "$claude_settings"
+            echo -e "  ${GREEN}✓${NC} Summon hook added to existing .claude/settings.json"
+        else
+            echo -e "  ${YELLOW}!${NC} PreToolUse hook already configured — skipping"
+        fi
+    else
+        cat > "$claude_settings" <<'SETTINGS'
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".clafra/summon.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
+SETTINGS
+        echo -e "  ${GREEN}✓${NC} .claude/settings.json created with summon hook"
+    fi
+    echo ""
+
     # Run doctor
     echo "Running health check..."
     echo ""

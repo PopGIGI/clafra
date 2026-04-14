@@ -35,6 +35,12 @@ LOG_FILE="${CLAFRA_DIR}/last-run.log"
         echo "Log pipeline scripts not found — skipping."
     fi
 
+    # Rebuild summon index if tools changed
+    if git diff --name-only HEAD~1 HEAD -- 'tools/*.json' 'skills/*.json' 2>/dev/null | grep -q .; then
+        echo "Rebuilding summon index..."
+        "${CLAFRA_DIR}/build-summon-index.sh" 2>&1 || true
+    fi
+
     echo ""
     echo "=== done ==="
 ) &

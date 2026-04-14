@@ -86,13 +86,31 @@ Before any pattern graduates to a tool or skill:
 
 |            | Summoning               | Testing                        |
 |------------|-------------------------|--------------------------------|
-| When       | Runtime, during session | Pre-commit or session start    |
-| Trigger    | Context — Claude calls  | Change signal or cadence       |
-| Overhead   | Zero                    | Proportional to risk           |
-| Output     | Result                  | Pass / stale / deprecated      |
-| Logged     | No                      | Yes                            |
+| When       | Runtime, during Edit    | Session start or pre-commit    |
+| Trigger    | File path match         | Change signal or cadence       |
+| Overhead   | ~10ms (jq lookup)       | Proportional to tool count     |
+| Output     | Constraints + checks    | Pass / stale / deprecated      |
+| Logged     | No                      | Yes (.clafra/validation.log)   |
 
 These must never be unified. A tool that tests itself on every call is not a tool.
+
+### How Summoning Works
+
+1. `build-summon-index.sh` parses `success_criteria` to extract file paths, builds a reverse
+   index (`.clafra/summon-index.json`): file → [tools that care about it].
+2. Index rebuilds automatically on post-commit when tool/skill files change.
+3. A Claude Code `PreToolUse` hook on `Edit` runs `summon.sh`, which reads the target file
+   path, looks it up in the index, and outputs the tool's intent + success_criteria as checks.
+4. Output is injected into the conversation context — no extra LLM call.
+5. Unmatched files produce zero output.
+
+### How Validation Logging Works
+
+Every `validate.sh` run appends to `.clafra/validation.log`:
+```
+timestamp | mode | commit | tool | PASS/FAIL | detail
+```
+This gives cross-session continuity — next session can see what broke and when.
 
 ---
 
@@ -162,11 +180,14 @@ This skill cannot validate itself with the system it governs.
 ## File Locations
 
 ```
-/CLAUDE.md               — master context, session constitution
-/SKILL-GOVERNANCE.md     — this file
-/patterns.json           — aggregate pattern data
-/tools/                  — active tools
-/skills/                 — active skills
-/deprecated/             — deprecated artifacts with audit trail
-/.clafra/                — governance scripts
+/CLAUDE.md                         — master context, session constitution
+/SKILL-GOVERNANCE.md               — this file
+/patterns.json                     — aggregate pattern data
+/tools/                            — active tools
+/skills/                           — active skills
+/deprecated/                       — deprecated artifacts with audit trail
+/.clafra/                          — governance scripts
+/.clafra/summon-index.json         — auto-generated file→tool reverse index
+/.clafra/validation.log            — append-only validation history
+/.claude/settings.json             — Claude Code hook config (summon on Edit)
 ```

@@ -11,6 +11,7 @@
 set -euo pipefail
 
 REPO_PATH="${1:-$(git rev-parse --show-toplevel 2>/dev/null)}"
+REPO_PATH="$(cd "$REPO_PATH" && pwd)"  # resolve to absolute
 CLAFRA_DIR="${REPO_PATH}/.clafra"
 CRON_STATE="${CLAFRA_DIR}/cron-state.json"
 REPO_NAME=$(basename "$REPO_PATH")

@@ -9,10 +9,23 @@
 
 set -euo pipefail
 
-CLAFRA_SOURCE="$(cd "$(dirname "$0")/.." && pwd)"
-GATHER_SCRIPT="${CLAFRA_SOURCE}/scripts/cron-gather.sh"
-REPOS_FILE="${CLAFRA_SOURCE}/.clafra/repos.json"
-CRON_LOG="${CLAFRA_SOURCE}/.clafra/cron.log"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# Support two layouts:
+# 1. Installed in a project .clafra/ (script dir is named .clafra)
+# 2. Clafra source tree: script is in scripts/, .clafra/ is a sibling
+if [[ "$(basename "$SCRIPT_DIR")" == ".clafra" ]]; then
+    # Layout 1: installed in project .clafra/
+    GATHER_SCRIPT="${SCRIPT_DIR}/cron-gather.sh"
+    REPOS_FILE="${SCRIPT_DIR}/repos.json"
+    CRON_LOG="${SCRIPT_DIR}/cron.log"
+else
+    # Layout 2: clafra source (script is in scripts/)
+    CLAFRA_SOURCE="$(cd "${SCRIPT_DIR}/.." && pwd)"
+    GATHER_SCRIPT="${CLAFRA_SOURCE}/scripts/cron-gather.sh"
+    REPOS_FILE="${CLAFRA_SOURCE}/.clafra/repos.json"
+    CRON_LOG="${CLAFRA_SOURCE}/.clafra/cron.log"
+fi
 DRY_RUN=false
 
 [[ "${1:-}" == "--dry-run" ]] && DRY_RUN=true
@@ -139,6 +152,11 @@ for i in $(seq 0 $((REPO_COUNT - 1))); do
     repo_path=$(jq -r ".repos[$i].path" "$REPOS_FILE")
     repo_name=$(jq -r ".repos[$i].name" "$REPOS_FILE")
     TOTAL=$((TOTAL + 1))
+
+    # Resolve relative paths (e.g., "..") relative to repos.json location
+    if [[ "$repo_path" != /* ]]; then
+        repo_path="$(cd "$(dirname "$REPOS_FILE")/$repo_path" 2>/dev/null && pwd)"
+    fi
 
     log "--- Processing: ${repo_name} (${repo_path}) ---"
 

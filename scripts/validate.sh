@@ -311,6 +311,44 @@ echo ""
 
 case "$MODE" in
     --session-start)
+        # Check for cron maintenance results
+        CRON_RESULTS_DIR="${CLAFRA_DIR}/cron-results"
+        if [[ -d "$CRON_RESULTS_DIR" ]]; then
+            # Check for unreviewed results
+            latest_result=$(ls -t "${CRON_RESULTS_DIR}"/*.json 2>/dev/null | grep -v '\-pending\.json$' | head -1 || true)
+            if [[ -n "$latest_result" ]]; then
+                reviewed=$(jq -r '.reviewed // false' "$latest_result" 2>/dev/null)
+                if [[ "$reviewed" != "true" ]]; then
+                    echo "Cron maintenance:"
+                    summary=$(jq -r '.summary // "results available"' "$latest_result" 2>/dev/null)
+                    log_info "$summary"
+                    log_info "Review: ${latest_result}"
+
+                    # Count tier1 findings
+                    t1_count=$(jq '([.tier1.dead_criteria[]?] | length) + ([.tier1.renamed_references[]?] | length) + ([.tier1.missing_stack_deps[]?] | length)' "$latest_result" 2>/dev/null || echo "0")
+                    if [[ "$t1_count" -gt 0 ]]; then
+                        log_warn "${t1_count} mechanical fix(es) proposed"
+                    fi
+
+                    # Count tier2 findings
+                    t2_count=$(jq '([.tier2.new_tool_candidates[]?] | length) + ([.tier2.deprecation_flags[]?] | length) + ([.tier2.consolidation_suggestions[]?] | length)' "$latest_result" 2>/dev/null || echo "0")
+                    if [[ "$t2_count" -gt 0 ]]; then
+                        log_warn "${t2_count} judgment item(s) need human review"
+                    fi
+                    echo ""
+                fi
+            fi
+
+            # Check for pending artifacts (auth was expired)
+            pending_count=$(ls "${CRON_RESULTS_DIR}"/*-pending.json 2>/dev/null | wc -l || echo "0")
+            if [[ "$pending_count" -gt 0 ]]; then
+                echo "Cron auth:"
+                log_warn "${pending_count} pending artifact(s) — cron auth may have expired"
+                log_info "Re-auth with 'claude', then run: cron-dispatch.sh"
+                echo ""
+            fi
+        fi
+
         echo "Staleness & pending reviews:"
         for dir in tools skills; do
             for f in "${CLAFRA_ROOT}/${dir}"/*.json; do

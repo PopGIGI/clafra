@@ -1,0 +1,8 @@
+{
+  "repos": [
+    {"path": "/home/pop/poracle", "name": "poracle"},
+    {"path": "/home/pop/ryokaniz", "name": "ryokaniz"},
+    {"path": "/home/pop/osint_agent", "name": "osint_agent"},
+    {"path": "/home/pop/tft18", "name": "tft18"}
+  ]
+}

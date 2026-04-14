@@ -166,6 +166,54 @@ Session logs are never fed raw into pattern matching. They are reduced first.
 
 ---
 
+## Cron Maintenance
+
+A scheduled cron job runs daily to detect drift between code and governance artifacts.
+
+### Architecture
+
+```
+cron-gather.sh (pure bash, no LLM)
+    ↓ produces JSON artifact with concrete facts
+cron-dispatch.sh (orchestrator)
+    ↓ feeds artifact to claude CLI (headless)
+Claude agent (artifact-grounded, no self-investigation)
+    ↓ writes structured results
+.clafra/cron-results/YYYY-MM-DD.json
+    ↓ surfaced at
+validate.sh --session-start
+```
+
+### Anti-Circularity
+
+The LLM in the cron job never runs its own greps or diffs. `cron-gather.sh` is pure bash that produces mechanical truths (exit codes, match counts, file existence). The LLM receives only the pre-computed artifact and must cite it for every conclusion. This prevents AI-reviewing-AI circularity.
+
+### Two Tiers
+
+**Tier 1 — Mechanical (autonomous proposals):**
+- Renamed files in success_criteria (detected via `git diff --diff-filter=R`)
+- Deleted files referenced in criteria
+- Dead grep patterns (0 matches)
+- Missing stack_dependencies
+
+**Tier 2 — Judgment (human review required):**
+- New tool candidates (from flagged patterns in `patterns.json`)
+- Deprecation flags (tools failing across multiple cron runs)
+- Tool consolidation suggestions (overlapping criteria after drift)
+
+### Auth Handling
+
+The cron job uses Claude Max OAuth. If the token expires, `cron-gather.sh` still runs (pure bash) and saves artifacts as pending. `validate.sh --session-start` surfaces a warning to re-auth.
+
+### Review
+
+Results appear at session start. To mark as reviewed:
+```bash
+jq '.reviewed = true' .clafra/cron-results/YYYY-MM-DD.json > tmp && mv tmp .clafra/cron-results/YYYY-MM-DD.json
+```
+
+---
+
 ## Self-Governance
 
 This skill cannot validate itself with the system it governs.
@@ -189,5 +237,7 @@ This skill cannot validate itself with the system it governs.
 /.clafra/                          — governance scripts
 /.clafra/summon-index.json         — auto-generated file→tool reverse index
 /.clafra/validation.log            — append-only validation history
+/.clafra/cron-results/             — daily cron maintenance results
+/.clafra/cron-state.json           — last processed commit per cron run
 /.claude/settings.json             — Claude Code hook config (summon on Edit)
 ```

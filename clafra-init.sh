@@ -106,13 +106,13 @@ install_project() {
 
     # Create directory structure
     echo "Creating directories..."
-    for dir in tools skills deprecated .clafra .clafra/pending-reviews; do
+    for dir in tools skills deprecated .clafra .clafra/pending-reviews .clafra/cron-results; do
         mkdir -p "${TARGET}/${dir}"
         echo -e "  ${GREEN}✓${NC} ${dir}/"
     done
 
     # Add .gitkeep to empty dirs
-    for dir in tools skills deprecated .clafra/pending-reviews; do
+    for dir in tools skills deprecated .clafra/pending-reviews .clafra/cron-results; do
         if [[ -z "$(ls -A "${TARGET}/${dir}" 2>/dev/null)" ]]; then
             touch "${TARGET}/${dir}/.gitkeep"
         fi
